@@ -1,7 +1,10 @@
-# Yeast Genome Assembly Pipeline
-*A reproducible workflow for assembling yeast genomes using FASTP, MEGAHIT, RAGTAG, BUSCO and QUAST*  
+# LBCM Yeast Genome Assembly Pipeline
+
+*A reproducible workflow for assembling yeast genomes using FASTP, MEGAHIT, RAGTAG, BUSCO and QUAST by LBCM (Laboratório de Biologia Computacional e Molecular)*  
+
 
 ---
+
 
 ## Overview  
 Automated pipeline for:  
@@ -15,6 +18,7 @@ Automated pipeline for:
 **Key Tools**: FASTP, MEGAHIT, RagTag, BUSCO, QUAST.  
 
 ---
+
 
 ## Quick Start  
 
@@ -74,6 +78,7 @@ chmod +x ./scripts/pipeline_run.sh    # Make the file executable
 
 --- 
 
+
 ## Output Structure
 
 ```bash
@@ -89,6 +94,7 @@ results/
 
 --- 
 
+
 ## Dependencies
 
 - **Conda** (Miniconda or Anaconda)
@@ -103,6 +109,7 @@ dependencies:
 ```
 
 ---
+
 
 ## Perspectives
 
