@@ -7,6 +7,7 @@
 # - Error handling
 # - Config file support
 
+
 ### --- Initialize Pipeline --- ###
 set -euo pipefail  # Strict error handling
 
@@ -53,12 +54,13 @@ if [ -t 1 ]; then
 fi
 
 
+
 ### --- Pipeline Functions --- ###
 run_command() {
     # Color definitions
     local RED='\033[0;31m'
     local GREEN='\033[0;32m'
-    local YELLOW='\033[0;33m'
+    local CYAN='\033[0;36m'  
     local BLUE='\033[0;34m'
     local NC='\033[0m' # No Color
 
@@ -66,10 +68,12 @@ run_command() {
     local cmd=$2
     
     # Print colored header
-    echo -e "${BLUE}=== RUNNING ${YELLOW}$step${BLUE} ===${NC}"
-    echo -e "${BLUE}Command:${NC} ${YELLOW}$cmd${NC}"
+    echo -e "${BLUE}=== RUNNING ${CYAN}$step${BLUE} ===${NC}"
+    # Clean and print command (collapse multiple spaces, keep single spaces)
+    local cleaned_cmd=$(echo "$cmd" | tr -s ' ' | sed 's/^ *//;s/ *$//')
+    echo -e "${BLUE}Command:${NC} ${CYAN}$cleaned_cmd${NC}"
     
-    # Execute command (original behavior preserved)
+    # Execute command 
     if eval "$cmd"; then
         echo -e "${GREEN}=== COMPLETED $step ===${NC}"
     else
@@ -77,6 +81,7 @@ run_command() {
         exit 1
     fi
 }
+
 
 
 ### --- Main Pipeline --- ###
@@ -134,26 +139,34 @@ for genome_dir in "$GENOMES_DIR"/*; do
         "ragtag.py correct '$REFERENCE' '$OUTDIR/2_megahit/final.contigs.fa' \
                 -o '$OUTDIR/3_ragtag' \
                 -t $THREADS"
+
+    run_command "RAGTAG" \
         "ragtag.py scaffold '$REFERENCE' '$OUTDIR/3_ragtag/ragtag.correct.fasta' \
                 -o '$OUTDIR/3_ragtag' \
                 -t $THREADS"
+
+    run_command "RAGTAG" \
         "ragtag.py patch '$REFERENCE' '$OUTDIR/3_ragtag/ragtag.scaffold.fasta' \
                 -o '$OUTDIR/3_ragtag' \
                 -t $THREADS"
 
-    # 4. Quality assessment (parallel)
+    # 4. Completeness assessment with BUSCO and quality assessment with QUAST (in parallel)
     run_command "BUSCO" \
         "busco -i '$OUTDIR/3_ragtag/ragtag.patch.fasta' \
               -o '$OUTDIR/4_busco' \
               -l '$BUSCO_LINEAGE' \
-              -m genome -c $THREADS" &
+              -m genome -c $THREADS" 
+    busco_pid=$!  # Store process ID
     
+    # 5. Quality assessment with QUAST
     run_command "QUAST" \
         "quast.py '$OUTDIR/3_ragtag/ragtag.patch.fasta' \
                  -o '$OUTDIR/5_quast' \
-                 --threads $THREADS" &
+                 --threads $THREADS" 
+    quast_pid=$!  # Store process ID
 
-    wait  # Wait for parallel jobs
+    wait $busco_pid $quast_pid  # Wait for both processes specifically
+    
 done
 
 echo "=== Pipeline completed successfully! ==="
