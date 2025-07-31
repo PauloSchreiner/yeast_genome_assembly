@@ -7,3 +7,4 @@ raw_data/
 *.sam
 *.fq
 *.fastq
+*.fai
