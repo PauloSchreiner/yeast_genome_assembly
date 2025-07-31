@@ -1,0 +1,5 @@
+threads: 4                 # Number of CPU cores to use
+ram_percentage: 0.75                # Total RAM (GB) available
+genomes_dir: raw_data    # Directory containing genome folders
+busco_lineage: saccharomycetes_odb10  # BUSCO database
+reference: /references/S288C.fa  # Path to reference genome for RagTag

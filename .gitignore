@@ -1,0 +1,9 @@
+results/
+logs/
+env/
+raw_data/
+*.tmp
+*.bam
+*.sam
+*.fq
+*.fastq

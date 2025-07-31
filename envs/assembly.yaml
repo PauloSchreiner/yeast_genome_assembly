@@ -1,0 +1,12 @@
+name: yeast_assembly
+channels:
+ - conda-forge
+ - bioconda
+dependencies: 
+ - fastp=1.0.1
+ - megahit=1.2.9
+ - ragtag=2.1.0
+ - busco=6.0.0
+ - quast=5.3.0
+ - python=3.12.11
+
