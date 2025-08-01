@@ -17,9 +17,7 @@ fi
 # Set up directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")" 
-TOOL_DATA_DIR="$PROJECT_ROOT/tool_data" # Centralized tool data directory
-export BUSCO_CONFIG_FILE="$TOOL_DATA_DIR/busco/config.ini" # Necessary for BUSCO
-export BUSCO_DOWNLOADS_PATH="$TOOL_DATA_DIR/busco/downloads"
+EXTERNAL_DIR="$PROJECT_ROOT/external" # Centralized tool data directory
 
 
 # Create timestamped run directory within /output/
@@ -116,7 +114,17 @@ for genome_dir in "$GENOMES_DIR"/*/; do
     # Create output directories
     OUTDIR="$RUN_DIR/$genome"
     mkdir -p "$OUTDIR"/{1_fastp,3_ragtag,4_busco,5_quast} # Do not create /2_megahit/ in this step - it is created automatically when running megahit
+    
+    # TEMPORARY FOR DEBUGGING
+    run_command "BUSCO" \
+        "busco -i '/home/paulo/Genomas/yeast_assembly/output/run_20250731_193834_GOOD/NCYC357/3_ragtag/ragtag.patch.fasta' \
+              -o 'busco_results' \
+              -l '$BUSCO_LINEAGE' \
+              -m genome -c $THREADS \
+              --out_path '$OUTDIR/4_busco'\
+              --download_path '$EXTERNAL_DIR/busco/downloads'"
 
+    
     # 1. Read trimming with fastp
     run_command "FASTP" \
         "fastp --in1 '$R1' --in2 '$R2' \

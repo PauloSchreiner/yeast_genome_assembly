@@ -85,7 +85,6 @@ The project root diretory looks like this:
 ├── config        # Customizable configurations (to change tools and their parameters)
 ├── envs          # Conda environment files 
 ├── external      # Data necessary for certain tools to run 
-├── raw_data      # Where the user must input the raw sequencing data (two paired-end reads)
 ├── input         # User input goes here
 |   ├─ raw_data   # Raw sequencing data goes here  
 |   └─ references # Reference genome (used by some tools) goes here

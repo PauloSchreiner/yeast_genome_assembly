@@ -1,30 +1,17 @@
+# Devlog/notes
 
 
+---
 
-vou dar uma olhada nas próximas coisas agora:
-- Análise com quast 
-- Anotação com augustus
-- Entender melhor as estatísticas e parâmetros do fastp
-- Rodar abyss e comparar com MEGAHIT
-- Estudar padrões do RagTag pra aumentar continuidade 
-- Ler artigo Matheus
-
-Médio prazo/Exploratório:
-- Estudar Jupyter Notebook
-- Estudar snakemake ou outra ferramenta de pipelines
-- Estudar clusters - ssh, etc
-- Estudar Docker
-
-
-
-To do:
+## CURRENT PLAN
 1. Create the prototype of the pipeline and make it work.
-This prototype should:
+This prototype should: 
 - accept input (one or multiple genomes) and basic parameters such as GPU and RAM usage;
 - process the inputs in an orderly but non-flexible manner;
 - output the results in an orderly manner.
 - have everything documented in a README file.
 The prototype should be user-friendly, simple, and just work. 
+*I find it safe to say this has already been achieved*
 
 2. Add onto the prototype:
 - Study other pipelines and understand how they are better than our prototype (here enters a review)
@@ -32,31 +19,38 @@ The prototype should be user-friendly, simple, and just work.
 - Add modularity and flexibility as of the tools used in each step (for example, allow the user to choose between megahit and abyss)
 - Document all changes made and new features in the README file.
 
+---
 
-====================================================================
-
-URGENT ISSUES
-
-busco tá dando sempre o mesmo resultado? é normal isso? 
-snakemake for resume functionality?
-README.md not updating in github
-
-NOT URGENT ISSUES:
-- Can't continue a run that has completed some of the steps but failed close to the end — find a way to resume a failed run if there are usable partial results
-- Add abyss e modularidade
-- Add command parameters (fastp, etc)
-fastp -i NCYC357_test_L1_1.fq.gz -I NCYC357_test_L1_2.fq.gz -o result1complexity.fq.gz \
--O result2complexity.fq.gz -q 28 --detect_adapter_for_pe --correction --trim_tail1=2 \
---trim_tail2=2 --trim_front1=10 --trim_front2=10 --trim_poly_x -p -y
+## TO STUDY
+- Anotação com Augustus
+- Entender melhor as estatísticas e parâmetros do fastp e das outras ferramentas
+- Estudar padrões do RagTag pra aumentar continuidade 
+- Ler artigo Matheus e fazer revisão de pipelines de montagem de genomas de leveduras
 
 
-Fixed:
+## SHORT-TERM
+- Is busco always giving the same results? Is this normal? 
+- Resume functionality — use snakemake instead of bash?
+- Config profiles, modularity and parameter customization 
+    - in order to do this, we will need to change config file parsing and create some sort of super run_command function to handle the different commands to be run. 
+    - then, to expand, it will be a matter of learning each tool's syntax and accepted parameters.
+    - perhaps I will need to store the syntax and accepted parameters in an external file (JSON?)
+
+- Run the following command and compare results:
+    ```bash
+    fastp -i NCYC357_test_L1_1.fq.gz -I NCYC357_test_L1_2.fq.gz -o result1complexity.fq.gz \
+    -O result2complexity.fq.gz -q 28 --detect_adapter_for_pe --correction --trim_tail1=2 \
+    --trim_tail2=2 --trim_front1=10 --trim_front2=10 --trim_poly_x -p -y
+    ```
+
+## LONG-TERM GOALS
+- Turn it into a CLI tool (add argument handling, etc) 
 
 
 
+--- 
 
-=======================================
-DeepSeek's ideas:
+DeepSeek's improvement ideas:
 Areas for Improvement (Based on Your Plans)
 
     Resume Functionality
@@ -75,15 +69,16 @@ Quick Fixes/Suggestions
     MEGAHIT: Explicitly set --k-min/--k-max for yeast (e.g., --k-list 21,33,55).
     RagTag: Use --aligner minimap2 (faster than default nucmer for yeast-sized genomes).
     BUSCO: Add --augustus_species saccharomyces to improve gene prediction.
+
 Example Upgrade (Modular Tools)
 In config.yaml, add:
 yaml
 assembler: "megahit"  # or "abyss", "spades"
 megahit_params: "--k-list 21,33,55 --min-count 2"
 abyss_params: "-k 55 -j 4"
+
 Then in pipeline_run.sh:
 bash
-
 case "$ASSEMBLER" in
     "megahit") megahit $MEGAHIT_PARAMS ... ;;
     "abyss")   abyss-pe $ABYSS_PARAMS ... ;;
