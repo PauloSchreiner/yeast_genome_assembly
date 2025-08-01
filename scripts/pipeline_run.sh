@@ -155,15 +155,14 @@ for genome_dir in "$GENOMES_DIR"/*/; do
               -o 'busco_results' \
               -l '$BUSCO_LINEAGE' \
               -m genome -c $THREADS \
-              --out_path '$OUTDIR/4_busco'"
+              --out_path '$OUTDIR/4_busco'
+              --download_path '$EXTERNAL_DIR/busco'"
     
     # 5. Quality assessment with QUAST
     run_command "QUAST" \
         "quast.py '$OUTDIR/3_ragtag/ragtag.patch.fasta' \
                  -o '$OUTDIR/5_quast' \
                  --threads $THREADS" 
-
-
 done
 
 echo -e "${GREEN}=== Pipeline completed successfully! === ${NC}"
