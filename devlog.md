@@ -29,6 +29,7 @@ The prototype should be user-friendly, simple, and just work.
 
 
 ## SHORT-TERM
+- Add empty lines in output for cleaner logging
 - Is busco always giving the same results? Is this normal? 
 - Resume functionality — use snakemake instead of bash?
 - Config profiles, modularity and parameter customization 

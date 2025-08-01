@@ -55,7 +55,8 @@ input/raw_data/
          ├─ SAMPLE_NAME_1.fq.gz  # Read 1  
          └─ SAMPLE_NAME_2.fq.gz  # Read 2  
 ```
-The 
+The expected input consists of two paired-end Illumina reads. 
+*Important: the filenames must end with "1.fq.gz" and "2.fq.gz" to be correctly selected.*
 
 
 Add the reference genome (used in BUSCO) to the ```/input/references``` folder, as such:
@@ -65,8 +66,7 @@ input/references
       ├── S288C.fa
       └── S288C.fa.fai
 ```
-Obs.: the .fai index file is generated automatically if missing, and the README.md file is recommended to provide insight into the reference genome used. 
-
+The ```README.md``` file is recommended to provide insight into the reference genome used, and a ```.fa.fai``` index file will be automatically generated — it helps with BUSCO performance. 
 
 ### 5. Run the pipeline
 ```bash
