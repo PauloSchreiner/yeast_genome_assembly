@@ -1,10 +1,12 @@
-results/
-logs/
+output/
 env/
-raw_data/
+input/
+external/
 *.tmp
 *.bam
 *.sam
 *.fq
 *.fastq
 *.fai
+*.prfl
+*.gz

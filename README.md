@@ -1,21 +1,20 @@
 # LBCM Yeast Genome Assembly Pipeline
 
-*A reproducible workflow for assembling yeast genomes using FASTP, MEGAHIT, RAGTAG, BUSCO and QUAST by LBCM (Laboratório de Biologia Computacional e Molecular)*  
+*A reproducible workflow for assembling yeast genomes using FASTP, MEGAHIT, RAGTAG, BUSCO and QUAST, by LBCM (Laboratório de Biologia Computacional e Molecular)* 
 
 
 ---
 
 
 ## Overview  
-Automated pipeline for:  
+**Automated pipeline for:**  
 - Quality control of Illumina reads (FASTP)  
 - Genome assembly (MEGAHIT)  
-- Reference-guided scaffolding (RagTag)  
+- Reference-guided correction, scaffolding and patching (RagTag)  
 - Completeness assessment (BUSCO)  
 - Assembly metrics (QUAST)  
 
-**Target Users**: Bioinformaticians and yeast researchers.  
-**Key Tools**: FASTP, MEGAHIT, RagTag, BUSCO, QUAST.  
+*Designed for assembling Illumina paired-end reads.*
 
 ---
 
@@ -25,8 +24,8 @@ Automated pipeline for:
 ### 1. Clone the repository  
 
 ```bash  
-git clone https://github.com/PauloSchreiner/yeast-genome-assembly.git  
-cd yeast-genome-assembly
+git clone https://github.com/PauloSchreiner/yeast_genome_assembly.git  
+cd yeast_genome_assembly
 ```
 
 ### 2. Set up the environment
@@ -38,33 +37,33 @@ conda activate yeast_assembly
 
 ### 3. Configure the pipeline
 
-Edit config.yaml:
+Edit /config/config.yaml as you wish:
 ```bash
-threads: 8                # CPU cores to use  
-ram_percentage: 0.75      # Fraction of RAM for MEGAHIT (0-1)  
-genomes_dir: "raw_data"   # Input directory with FASTQ files  
-busco_lineage: "saccharomycetes_odb10"  
-reference: "references/S288C.fa"  
+threads: 4                               # CPU cores to use  
+ram_percentage: 0.75                     # Fraction of RAM for MEGAHIT (0-1)  
+genomes_dir: "raw_data"                  # Input directory with FASTQ files  
+busco_lineage: "saccharomycetes_odb10"   # Lineage to be used by BUSCO
+reference: "references/S288C.fa"         # Reference genome used by RagTag 
 ```
 
 ### 4. Add the input
 
-Add the input to the ```/raw_data``` folder, as follows:
+Add the raw sequencing data to the ```/input/raw_data``` folder, as follows:
 ```bash
-raw_data/  
-└─ SAMPLE_NAME/  
-   ├─ SAMPLE_NAME_1.fq.gz  # Read 1  
-   └─ SAMPLE_NAME_2.fq.gz  # Read 2  
+input/raw_data/  
+      └─ SAMPLE_NAME/  
+         ├─ SAMPLE_NAME_1.fq.gz  # Read 1  
+         └─ SAMPLE_NAME_2.fq.gz  # Read 2  
 ```
+The 
 
 
-
-Add the reference genome (used in BUSCO) to the ```/references``` folder, as such:
+Add the reference genome (used in BUSCO) to the ```/input/references``` folder, as such:
 ```bash
-└─ references
-   ├── README.md
-   ├── S288C.fa
-   └── S288C.fa.fai
+input/references
+      ├── README.md
+      ├── S288C.fa
+      └── S288C.fa.fai
 ```
 Obs.: the .fai index file is generated automatically if missing, and the README.md file is recommended to provide insight into the reference genome used. 
 
@@ -78,6 +77,25 @@ chmod +x ./scripts/pipeline_run.sh    # Make the file executable
 
 --- 
 
+## Directory tree
+
+The project root diretory looks like this:
+```bash
+.
+├── config        # Customizable configurations (to change tools and their parameters)
+├── envs          # Conda environment files 
+├── external      # Data necessary for certain tools to run 
+├── raw_data      # Where the user must input the raw sequencing data (two paired-end reads)
+├── input         # User input goes here
+|   ├─ raw_data   # Raw sequencing data goes here  
+|   └─ references # Reference genome (used by some tools) goes here
+├── output        # Contains the outputs of each run
+└── scripts       # Contains the main pipeline script
+```
+
+
+---
+
 
 ## Output Structure
 
@@ -87,7 +105,7 @@ results/
    └─ SAMPLE_NAME/  
       ├─ 1_fastp/       # Trimmed reads and QC reports  
       ├─ 2_megahit/     # Assembly contigs  
-      ├─ 3_ragtag/      # Scaffolded assembly  
+      ├─ 3_ragtag/      # Corrected, scaffolded and patched assembly  
       ├─ 4_busco/       # Completeness report (BUSCO)  
       └─ 5_quast/       # Assembly metrics (QUAST)  
 ```
@@ -151,6 +169,14 @@ dependencies:
       - Archive used configs in results/run_*/config_backup.yaml
       - Generate comparative reports when different configs are tested
 
+
+- **Expanding to genome annotation**:
+    Why limit ourselves to assembling yeast genomes? This tool will later be expanded to include genome annotation with Augustus! 
+
+- **Improving outputs**:
+    Last but not least, improve the terminal outputs and create general reports of all pipeline for users to assess.  
+
+---
 
 *If you have suggestions, please open an issue within the repo! :D*
 
