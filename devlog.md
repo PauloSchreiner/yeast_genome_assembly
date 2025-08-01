@@ -45,6 +45,13 @@ The prototype should be user-friendly, simple, and just work.
 
 ## LONG-TERM GOALS
 - Turn it into a CLI tool (add argument handling, etc) 
+- Improve reports and statistics:
+    - Time elapsed in each tool
+    - Partial results (quality control, etc)
+    - Centralize everything
+    - Allow user to compare different workflows for prototyping
+- Find ways to turn this into a truly remarkable tool, instead of just something you could fix up with a bash script
+
 
 
 
