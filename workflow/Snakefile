@@ -1,40 +1,79 @@
+import re
+import datetime
+import os
+import glob 
+
 # Points the config file
 configfile: "../config/config.yaml" # Centralizes parameters
-import re
-import date
 
+# Call config parameters
 path_genome = config["genomes_dir"]
-genomes = config["organisms"]
-ks = config["k"]
+
+# If you decide to work with such, remember to
+# add a function to sanitize the genomes names
+# thus avoiding characters like " " and other that can
+# disrupt the pipline flow
+
+if os.path.isdir(path_genome):
+    genomes = [d for d in os.listdir(path_genome) if os.path.isdir(os.path.join(path_genome, d))]
+
+else:
+    raise FileNotFoundError(f"Genome directory '{path_genome}' does not exist or is not accessible!")
+
+run_time_identity = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # For path manipulation
 path_scripts="scripts/"
 path_external="external/"
 
-
 # Establishes expected outputs at the pipeline's end
-# This rule is used to ensure that all organisms and k values are processed
-
+# see the wildcards usage {}
 rule all:
     input:
+        expand("results/{genome}_{run_time}/.dir_created", 
+               genome=genomes, run_time=run_time_identity),
         "final.txt"
-        
-# Create needed directories, assuring the pipeline can run smoothly
-rule create_directories:
+
+# The first solution i thought was as seen below
+# just create one directory for each genome with
+# genome + run time (avoiding overwrite) and using wildcards      
+rule create_base_directories:
     output:
-        touch("results/{k}/.dir_created")
+        # the .file allows snakemake to take something as input to continue
+        # the pipeline, the fact that each dot file is inside a directory
+        # of time specific run, overwrite or nothing to do is avoided
+        touch("results/{genome}_{run_time}/.dir_created")
     shell:
         """
-        mkdir -p results/{wildcards.k} runs logs benchmarks results/checked
+        mkdir -p results/{wildcards.genome}_{wildcards.run_time}
+        mkdir -p external
+        echo "Created directory for genome: {wildcards.genome}"
         """
 
-# Finalização (marca que terminou para cada organismo/k)
-rule finalize:
+# The rule below test the creation of individual output files
+# for each run time coded folder, showing how wildcards make this
+# happen allowing parallel processing
+rule test_processing:
     input:
-        nullomers=path_results + "{organismo}/nullomers_{organismo}_{k}.txt"
+        "results/{genome}_{run_time}/.dir_created"
     output:
-        done=path_final + "{organismo}_done.txt"
+        touch("results/{genome}_{run_time}/oiaoteste.txt")
     shell:
         """
-        echo "Done for {wildcards.organismo} k={wildcards.k}" > {output}
+        echo "Processing genome: {wildcards.genome}" > {output}
+        echo "Run time: {wildcards.run_time}" >> {output}
+        echo "Test file created successfully" >> {output}
         """
+
+rule create_final:
+    input:
+        expand("results/{genome}_{run_time}/oiaoteste.txt", 
+               genome=genomes, run_time=run_time_identity)
+    output:
+        "final.txt"
+    run:
+        with open(output[0], 'w') as f:
+            f.write(f"Pipeline completed at: {datetime.now()}\n")
+            f.write(f"Run ID: {run_time_identity}\n")
+            f.write(f"Processed genomes: {', '.join(genomes)}\n")
+            f.write(f"Total genomes processed: {len(genomes)}\n")
