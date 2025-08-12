@@ -10,3 +10,5 @@ external/
 *.fai
 *.prfl
 *.gz
+workflow/.snakemake
+workflow/results/*
