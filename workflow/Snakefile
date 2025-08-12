@@ -1,0 +1,40 @@
+# Points the config file
+configfile: "../config/config.yaml" # Centralizes parameters
+import re
+import date
+
+path_genome = config["genomes_dir"]
+genomes = config["organisms"]
+ks = config["k"]
+
+# For path manipulation
+path_scripts="scripts/"
+path_external="external/"
+
+
+# Establishes expected outputs at the pipeline's end
+# This rule is used to ensure that all organisms and k values are processed
+
+rule all:
+    input:
+        "final.txt"
+        
+# Create needed directories, assuring the pipeline can run smoothly
+rule create_directories:
+    output:
+        touch("results/{k}/.dir_created")
+    shell:
+        """
+        mkdir -p results/{wildcards.k} runs logs benchmarks results/checked
+        """
+
+# Finalização (marca que terminou para cada organismo/k)
+rule finalize:
+    input:
+        nullomers=path_results + "{organismo}/nullomers_{organismo}_{k}.txt"
+    output:
+        done=path_final + "{organismo}_done.txt"
+    shell:
+        """
+        echo "Done for {wildcards.organismo} k={wildcards.k}" > {output}
+        """
