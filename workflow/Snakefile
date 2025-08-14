@@ -2,57 +2,93 @@ import os
 from datetime import datetime
 import glob
 
-# Load config
+# Load configuration
 configfile: "config/config.yaml"
 
-# Set run_id (timestamp if empty)
-run_id = config.get("run_id", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-BASE_DIR = os.path.abspath(f"results/{run_id}")  # Ensures clean path
+# --- Project Structure Setup ---
+# Get absolute path to project root (where you run snakemake)
+PROJECT_ROOT = os.getcwd()
+
+# Set results paths
+RESULTS_DIR = os.path.join(PROJECT_ROOT, config.get("results_root", "results"))
+
+# Generate run_id if not provided
+if "run_id" not in config or not config["run_id"]:
+    run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    print(f"Generated run_id: {run_id}")
+else:
+    run_id = config["run_id"]
+    print(f"Using config run_id: {run_id}")
+
+RUN_DIR = os.path.join(RESULTS_DIR, run_id)
+SAMPLE_DIR = os.path.join(RUN_DIR, "samples")
 
 
-# Automatically detect samples from directory structure
+# Ensure required directories exist
+os.makedirs(SAMPLE_DIR, exist_ok=True)
+os.makedirs(os.path.join(PROJECT_ROOT, "external/busco"), exist_ok=True)
+
+# --- Sample Detection ---
 def get_samples():
-    sample_dirs = glob.glob("data/raw/*")
     samples = []
-    for d in sample_dirs:
-        if os.path.isdir(d):
-            sample = os.path.basename(d)
-            # Check if both R1 and R2 files exist
-            r1 = glob.glob(f"data/raw/{sample}/*_1.fq.gz")
-            r2 = glob.glob(f"data/raw/{sample}/*_2.fq.gz")
-            if r1 and r2:
-                samples.append(sample)
+    raw_data_dir = os.path.join(PROJECT_ROOT, "data/raw")
+    
+    # Check if raw data directory exists
+    if not os.path.exists(raw_data_dir):
+        raise FileNotFoundError(f"Raw data directory not found: {raw_data_dir}")
+    
+    # Find all sample directories
+    for sample_name in os.listdir(raw_data_dir):
+        sample_path = os.path.join(raw_data_dir, sample_name)
+        if os.path.isdir(sample_path):
+            # Find paired FASTQ files
+            r1_files = glob.glob(os.path.join(sample_path, "*_1.fq.gz"))
+            r2_files = glob.glob(os.path.join(sample_path, "*_2.fq.gz"))
+            
+            if r1_files and r2_files:
+                samples.append(sample_name)
+            else:
+                print(f"Warning: Sample {sample_name} is missing paired FASTQ files")
+    
+    if not samples:
+        raise ValueError("No valid samples found in data/raw directory")
+    
+    print(f"Found {len(samples)} samples: {', '.join(samples)}")
     return samples
 
 SAMPLES = get_samples()
-
-# Ensure BUSCO download path exists
-EXTERNAL_DIR = os.path.abspath("external")
-os.makedirs(f"{EXTERNAL_DIR}/busco", exist_ok=True)
 
 # --- Rules ---
 rule all:
     input:
         expand(
-            "{base_dir}/4_busco/{sample}/busco_results/short_summary.txt",
-            base_dir=BASE_DIR,
+            os.path.join(SAMPLE_DIR, "{sample}", "4_busco", "short_summary.txt"),
             sample=SAMPLES
         ),
         expand(
-            "{base_dir}/5_quast/{sample}/report.html",
-            base_dir=BASE_DIR,
+            os.path.join(SAMPLE_DIR, "{sample}", "5_quast", "report.html"),
             sample=SAMPLES
         )
 
+# Helper function to find FASTQ files
+def find_fastq(wildcards, read):
+    pattern = os.path.join(
+        PROJECT_ROOT, "data/raw", wildcards.sample, f"*_{read}.fq.gz"
+    )
+    files = glob.glob(pattern)
+    if not files:
+        raise FileNotFoundError(f"No {read} files found for sample {wildcards.sample}")
+    return files[0]
+
 rule fastp:
     input:
-        r1 = lambda wildcards: glob.glob(f"data/raw/{wildcards.sample}/*_1.fq.gz")[0],
-        r2 = lambda wildcards: glob.glob(f"data/raw/{wildcards.sample}/*_2.fq.gz")[0]
+        r1 = lambda wildcards: find_fastq(wildcards, "1"),
+        r2 = lambda wildcards: find_fastq(wildcards, "2")
     output:
-        r1 = f"{BASE_DIR}/1_fastp/{{sample}}_clean_R1.fq.gz",
-        r2 = f"{BASE_DIR}/1_fastp/{{sample}}_clean_R2.fq.gz",
-        html = f"{BASE_DIR}/1_fastp/{{sample}}_report.html",
-        json = f"{BASE_DIR}/1_fastp/{{sample}}_report.json"
+        r1 = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "clean_R1.fq.gz"),
+        r2 = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "clean_R2.fq.gz"),
+        html = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "report.html"),
+        json = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "report.json")
     threads: config["threads"]
     shell:
         """
@@ -68,13 +104,19 @@ rule megahit:
         r1 = rules.fastp.output.r1,
         r2 = rules.fastp.output.r2
     output:
-        dir = directory(f"{BASE_DIR}/2_megahit/{{sample}}"),
-        contigs = f"{BASE_DIR}/2_megahit/{{sample}}/final.contigs.fa"
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "2_megahit")),
+        contigs = os.path.join(SAMPLE_DIR, "{sample}", "2_megahit", "final.contigs.fa")
     threads: config["threads"]
     resources:
         mem_mb = int(config["ram_percentage"] * os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 ** 2))
     shell:
         """
+        # Create fresh output directory
+        if [ -d "{output.dir}" ]; then
+            rm -rf "{output.dir}"
+        fi
+        mkdir -p "{output.dir}"
+        
         megahit -1 {input.r1} -2 {input.r2} \
                 -o {output.dir} \
                 -t {threads} \
@@ -83,11 +125,11 @@ rule megahit:
 
 rule ragtag_correct:
     input:
-        ref = config["reference"],
+        ref = os.path.join(PROJECT_ROOT, config["reference"]),
         contigs = rules.megahit.output.contigs
     output:
-        dir = directory(f"{BASE_DIR}/3_ragtag/{{sample}}/correct"),
-        corrected = f"{BASE_DIR}/3_ragtag/{{sample}}/correct/ragtag.correct.fasta"
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "correct")),
+        corrected = os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "correct", "ragtag.correct.fasta")
     threads: config["threads"]
     shell:
         """
@@ -98,11 +140,11 @@ rule ragtag_correct:
 
 rule ragtag_scaffold:
     input:
-        ref = config["reference"],
+        ref = os.path.join(PROJECT_ROOT, config["reference"]),
         corrected = rules.ragtag_correct.output.corrected
     output:
-        dir = directory(f"{BASE_DIR}/3_ragtag/{{sample}}/scaffold"),
-        scaffolded = f"{BASE_DIR}/3_ragtag/{{sample}}/scaffold/ragtag.scaffold.fasta"
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "scaffold")),
+        scaffolded = os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "scaffold", "ragtag.scaffold.fasta")
     threads: config["threads"]
     shell:
         """
@@ -113,11 +155,11 @@ rule ragtag_scaffold:
 
 rule ragtag_patch:
     input:
-        ref = config["reference"],
+        ref = os.path.join(PROJECT_ROOT, config["reference"]),
         scaffolded = rules.ragtag_scaffold.output.scaffolded
     output:
-        dir = directory(f"{BASE_DIR}/3_ragtag/{{sample}}/patch"),
-        patched = f"{BASE_DIR}/3_ragtag/{{sample}}/patch/ragtag.patch.fasta"
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "patch")),
+        patched = os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "patch", "ragtag.patch.fasta")
     threads: config["threads"]
     shell:
         """
@@ -130,34 +172,43 @@ rule busco:
     input:
         assembly = rules.ragtag_patch.output.patched
     output:
-        summary = f"{BASE_DIR}/4_busco/{{sample}}/busco_results/short_summary.txt"
-    threads: config["threads"]
+        summary = os.path.join(SAMPLE_DIR, "{sample}", "4_busco", "short_summary.txt")
     params:
         lineage = config["busco_lineage"],
-        out_path = f"{BASE_DIR}/4_busco/{{sample}}",
-        download_path = f"{EXTERNAL_DIR}/busco"
+        out_dir = os.path.join(SAMPLE_DIR, "{sample}", "4_busco"),
+        download_path = os.path.join(PROJECT_ROOT, "external/busco")
+    threads: config["threads"]
     shell:
         """
+        # Create output directory
+        mkdir -p "{params.out_dir}"
+        
         busco -i {input.assembly} \
               -o busco_results \
               -l {params.lineage} \
               -m genome \
               -c {threads} \
-              --out_path {params.out_path} \
-              --download_path {params.download_path}
+              --out_path "{params.out_dir}" \
+              --download_path "{params.download_path}"
+        
+        # Move summary to standard location
+        mv "{params.out_dir}/busco_results/short_summary.txt" "{output.summary}"
         """
 
 rule quast:
     input:
         assembly = rules.ragtag_patch.output.patched
     output:
-        report = f"{BASE_DIR}/5_quast/{{sample}}/report.html"
+        report = os.path.join(SAMPLE_DIR, "{sample}", "5_quast", "report.html")
     params:
-        outdir = f"{BASE_DIR}/5_quast/{{sample}}"
+        outdir = os.path.join(SAMPLE_DIR, "{sample}", "5_quast")
     threads: config["threads"]
     shell:
         """
+        # Create output directory
+        mkdir -p "{params.outdir}"
+        
         quast.py {input.assembly} \
-                 -o {params.outdir} \
+                 -o "{params.outdir}" \
                  --threads {threads}
         """
