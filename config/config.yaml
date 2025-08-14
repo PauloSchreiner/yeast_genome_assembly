@@ -1,5 +1,8 @@
-threads: 4                 # Number of CPU cores to use
-ram_percentage: 0.75                # Total RAM (GB) available
+run_id: "" # Unique identifier for the run, can be set manually or generated
+
 genomes_dir: data/raw   # Directory containing genome folders
 busco_lineage: saccharomycetes_odb10  # BUSCO database
-reference: /references/S288C.fa  # Path to reference genome for RagTag
+reference: data/references/S288C.fa  # Path to reference genome for RagTag
+
+threads: 4                 # Number of CPU cores to use
+ram_percentage: 0.75                # RAM fraction to use

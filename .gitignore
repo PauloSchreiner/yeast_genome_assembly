@@ -1,7 +1,8 @@
 output/
 env/
-input/
 external/
+/data/*
+!/data/README.md
 *.tmp
 *.bam
 *.sam
@@ -10,5 +11,6 @@ external/
 *.fai
 *.prfl
 *.gz
-workflow/.snakemake
+*.png
+.snakemake
 workflow/results/*

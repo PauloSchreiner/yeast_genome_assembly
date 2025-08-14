@@ -1,79 +1,163 @@
-import re
-import datetime
 import os
-import glob 
+from datetime import datetime
+import glob
 
-# Points the config file
-configfile: "../config/config.yaml" # Centralizes parameters
+# Load config
+configfile: "config/config.yaml"
 
-# Call config parameters
-path_genome = config["genomes_dir"]
+# Set run_id (timestamp if empty)
+run_id = config.get("run_id", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+BASE_DIR = os.path.abspath(f"results/{run_id}")  # Ensures clean path
 
-# If you decide to work with such, remember to
-# add a function to sanitize the genomes names
-# thus avoiding characters like " " and other that can
-# disrupt the pipline flow
 
-if os.path.isdir(path_genome):
-    genomes = [d for d in os.listdir(path_genome) if os.path.isdir(os.path.join(path_genome, d))]
+# Automatically detect samples from directory structure
+def get_samples():
+    sample_dirs = glob.glob("data/raw/*")
+    samples = []
+    for d in sample_dirs:
+        if os.path.isdir(d):
+            sample = os.path.basename(d)
+            # Check if both R1 and R2 files exist
+            r1 = glob.glob(f"data/raw/{sample}/*_1.fq.gz")
+            r2 = glob.glob(f"data/raw/{sample}/*_2.fq.gz")
+            if r1 and r2:
+                samples.append(sample)
+    return samples
 
-else:
-    raise FileNotFoundError(f"Genome directory '{path_genome}' does not exist or is not accessible!")
+SAMPLES = get_samples()
 
-run_time_identity = datetime.now().strftime("%Y%m%d_%H%M%S")
+# Ensure BUSCO download path exists
+EXTERNAL_DIR = os.path.abspath("external")
+os.makedirs(f"{EXTERNAL_DIR}/busco", exist_ok=True)
 
-# For path manipulation
-path_scripts="scripts/"
-path_external="external/"
-
-# Establishes expected outputs at the pipeline's end
-# see the wildcards usage {}
+# --- Rules ---
 rule all:
     input:
-        expand("results/{genome}_{run_time}/.dir_created", 
-               genome=genomes, run_time=run_time_identity),
-        "final.txt"
+        expand(
+            "{base_dir}/4_busco/{sample}/busco_results/short_summary.txt",
+            base_dir=BASE_DIR,
+            sample=SAMPLES
+        ),
+        expand(
+            "{base_dir}/5_quast/{sample}/report.html",
+            base_dir=BASE_DIR,
+            sample=SAMPLES
+        )
 
-# The first solution i thought was as seen below
-# just create one directory for each genome with
-# genome + run time (avoiding overwrite) and using wildcards      
-rule create_base_directories:
+rule fastp:
+    input:
+        r1 = lambda wildcards: glob.glob(f"data/raw/{wildcards.sample}/*_1.fq.gz")[0],
+        r2 = lambda wildcards: glob.glob(f"data/raw/{wildcards.sample}/*_2.fq.gz")[0]
     output:
-        # the .file allows snakemake to take something as input to continue
-        # the pipeline, the fact that each dot file is inside a directory
-        # of time specific run, overwrite or nothing to do is avoided
-        touch("results/{genome}_{run_time}/.dir_created")
+        r1 = f"{BASE_DIR}/1_fastp/{{sample}}_clean_R1.fq.gz",
+        r2 = f"{BASE_DIR}/1_fastp/{{sample}}_clean_R2.fq.gz",
+        html = f"{BASE_DIR}/1_fastp/{{sample}}_report.html",
+        json = f"{BASE_DIR}/1_fastp/{{sample}}_report.json"
+    threads: config["threads"]
     shell:
         """
-        mkdir -p results/{wildcards.genome}_{wildcards.run_time}
-        mkdir -p external
-        echo "Created directory for genome: {wildcards.genome}"
+        fastp --in1 {input.r1} --in2 {input.r2} \
+              --out1 {output.r1} --out2 {output.r2} \
+              --trim_poly_x --correction \
+              --html {output.html} --json {output.json} \
+              --thread {threads}
         """
 
-# The rule below test the creation of individual output files
-# for each run time coded folder, showing how wildcards make this
-# happen allowing parallel processing
-rule test_processing:
+rule megahit:
     input:
-        "results/{genome}_{run_time}/.dir_created"
+        r1 = rules.fastp.output.r1,
+        r2 = rules.fastp.output.r2
     output:
-        touch("results/{genome}_{run_time}/oiaoteste.txt")
+        dir = directory(f"{BASE_DIR}/2_megahit/{{sample}}"),
+        contigs = f"{BASE_DIR}/2_megahit/{{sample}}/final.contigs.fa"
+    threads: config["threads"]
+    resources:
+        mem_mb = int(config["ram_percentage"] * os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 ** 2))
     shell:
         """
-        echo "Processing genome: {wildcards.genome}" > {output}
-        echo "Run time: {wildcards.run_time}" >> {output}
-        echo "Test file created successfully" >> {output}
+        megahit -1 {input.r1} -2 {input.r2} \
+                -o {output.dir} \
+                -t {threads} \
+                --memory {resources.mem_mb}
         """
 
-rule create_final:
+rule ragtag_correct:
     input:
-        expand("results/{genome}_{run_time}/oiaoteste.txt", 
-               genome=genomes, run_time=run_time_identity)
+        ref = config["reference"],
+        contigs = rules.megahit.output.contigs
     output:
-        "final.txt"
-    run:
-        with open(output[0], 'w') as f:
-            f.write(f"Pipeline completed at: {datetime.now()}\n")
-            f.write(f"Run ID: {run_time_identity}\n")
-            f.write(f"Processed genomes: {', '.join(genomes)}\n")
-            f.write(f"Total genomes processed: {len(genomes)}\n")
+        dir = directory(f"{BASE_DIR}/3_ragtag/{{sample}}/correct"),
+        corrected = f"{BASE_DIR}/3_ragtag/{{sample}}/correct/ragtag.correct.fasta"
+    threads: config["threads"]
+    shell:
+        """
+        ragtag.py correct {input.ref} {input.contigs} \
+                -o {output.dir} \
+                -t {threads}
+        """
+
+rule ragtag_scaffold:
+    input:
+        ref = config["reference"],
+        corrected = rules.ragtag_correct.output.corrected
+    output:
+        dir = directory(f"{BASE_DIR}/3_ragtag/{{sample}}/scaffold"),
+        scaffolded = f"{BASE_DIR}/3_ragtag/{{sample}}/scaffold/ragtag.scaffold.fasta"
+    threads: config["threads"]
+    shell:
+        """
+        ragtag.py scaffold {input.ref} {input.corrected} \
+                -o {output.dir} \
+                -t {threads}
+        """
+
+rule ragtag_patch:
+    input:
+        ref = config["reference"],
+        scaffolded = rules.ragtag_scaffold.output.scaffolded
+    output:
+        dir = directory(f"{BASE_DIR}/3_ragtag/{{sample}}/patch"),
+        patched = f"{BASE_DIR}/3_ragtag/{{sample}}/patch/ragtag.patch.fasta"
+    threads: config["threads"]
+    shell:
+        """
+        ragtag.py patch {input.ref} {input.scaffolded} \
+                -o {output.dir} \
+                -t {threads}
+        """
+
+rule busco:
+    input:
+        assembly = rules.ragtag_patch.output.patched
+    output:
+        summary = f"{BASE_DIR}/4_busco/{{sample}}/busco_results/short_summary.txt"
+    threads: config["threads"]
+    params:
+        lineage = config["busco_lineage"],
+        out_path = f"{BASE_DIR}/4_busco/{{sample}}",
+        download_path = f"{EXTERNAL_DIR}/busco"
+    shell:
+        """
+        busco -i {input.assembly} \
+              -o busco_results \
+              -l {params.lineage} \
+              -m genome \
+              -c {threads} \
+              --out_path {params.out_path} \
+              --download_path {params.download_path}
+        """
+
+rule quast:
+    input:
+        assembly = rules.ragtag_patch.output.patched
+    output:
+        report = f"{BASE_DIR}/5_quast/{{sample}}/report.html"
+    params:
+        outdir = f"{BASE_DIR}/5_quast/{{sample}}"
+    threads: config["threads"]
+    shell:
+        """
+        quast.py {input.assembly} \
+                 -o {params.outdir} \
+                 --threads {threads}
+        """
