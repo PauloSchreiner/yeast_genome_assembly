@@ -6,6 +6,14 @@
 Issues:
 - When enabling multiple options for the same step (e.g. assembly with MEGAHIT or ABySS), how to set parameters in config file to minimize effort when switching between tools? Maybe it's not really possible - they're different tools, after all... the user should know the parameters to use. Maybe the best we can do is guide them through a paper!
 
+#### 15/08/2025
+
+Goal: Fix output directory structure
+
+In each run:
+get or create run_id and create run directory if nonexistent 
+for each sample, create sample directory (within run) if nonexistent 
+for each tool, create sample directory (be careful with megahit and similar tools! copy structure from bash script)
 
 
 ---

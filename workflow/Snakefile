@@ -20,9 +20,9 @@ else:
     run_id = config["run_id"]
     print(f"Using config run_id: {run_id}")
 
+
 RUN_DIR = os.path.join(RESULTS_DIR, run_id)
 SAMPLE_DIR = os.path.join(RUN_DIR, "samples")
-
 
 # Ensure required directories exist
 os.makedirs(SAMPLE_DIR, exist_ok=True)
@@ -42,8 +42,8 @@ def get_samples():
         sample_path = os.path.join(raw_data_dir, sample_name)
         if os.path.isdir(sample_path):
             # Find paired FASTQ files
-            r1_files = glob.glob(os.path.join(sample_path, "*_1.fq.gz"))
-            r2_files = glob.glob(os.path.join(sample_path, "*_2.fq.gz"))
+            r1_files = glob.glob(os.path.join(sample_path, "*1.fq.gz"))
+            r2_files = glob.glob(os.path.join(sample_path, "*2.fq.gz"))
             
             if r1_files and r2_files:
                 samples.append(sample_name)
@@ -62,11 +62,16 @@ SAMPLES = get_samples()
 rule all:
     input:
         expand(
-            os.path.join(SAMPLE_DIR, "{sample}", "4_busco", "short_summary.txt"),
+            os.path.join(
+                SAMPLE_DIR,
+                "{sample}",
+                "busco",
+                f"short_summary.specific.{config['busco_lineage']}.busco_results.txt"
+            ),
             sample=SAMPLES
         ),
         expand(
-            os.path.join(SAMPLE_DIR, "{sample}", "5_quast", "report.html"),
+            os.path.join(SAMPLE_DIR, "{sample}", "quast", "report.html"),
             sample=SAMPLES
         )
 
@@ -85,10 +90,10 @@ rule fastp:
         r1 = lambda wildcards: find_fastq(wildcards, "1"),
         r2 = lambda wildcards: find_fastq(wildcards, "2")
     output:
-        r1 = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "clean_R1.fq.gz"),
-        r2 = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "clean_R2.fq.gz"),
-        html = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "report.html"),
-        json = os.path.join(SAMPLE_DIR, "{sample}", "1_fastp", "report.json")
+        r1 = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "clean_R1.fq.gz"),
+        r2 = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "clean_R2.fq.gz"),
+        html = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "report.html"),
+        json = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "report.json")
     threads: config["threads"]
     shell:
         """
@@ -103,33 +108,36 @@ rule megahit:
     input:
         r1 = rules.fastp.output.r1,
         r2 = rules.fastp.output.r2
-    output:
-        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "2_megahit")),
-        contigs = os.path.join(SAMPLE_DIR, "{sample}", "2_megahit", "final.contigs.fa")
-    threads: config["threads"]
+    output: 
+        contigs = os.path.join(SAMPLE_DIR, "{sample}", "megahit", "final.contigs.fa")    
+    threads: 
+        config["threads"]
     resources:
         mem_mb = int(config["ram_percentage"] * os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 ** 2))
     shell:
         """
-        # Create fresh output directory
-        if [ -d "{output.dir}" ]; then
-            rm -rf "{output.dir}"
-        fi
-        mkdir -p "{output.dir}"
-        
+        # It is necessary to use a temporary directory because 
+        # MEGAHIT does not allow the output directory to exist beforehand,
+        # and Snakemake creates output directories automatically >:(
+
+        tmpdir="/tmp/megahit_{wildcards.sample}_$RANDOM" 
         megahit -1 {input.r1} -2 {input.r2} \
-                -o {output.dir} \
+                -o "$tmpdir" \
                 -t {threads} \
                 --memory {resources.mem_mb}
+        mkdir -p $(dirname {output.contigs})
+        mv "$tmpdir/final.contigs.fa" {output.contigs}
+        rm -rf "$tmpdir"
         """
+
 
 rule ragtag_correct:
     input:
         ref = os.path.join(PROJECT_ROOT, config["reference"]),
         contigs = rules.megahit.output.contigs
     output:
-        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "correct")),
-        corrected = os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "correct", "ragtag.correct.fasta")
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "correct")),
+        corrected = os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "correct", "ragtag.correct.fasta")
     threads: config["threads"]
     shell:
         """
@@ -143,8 +151,8 @@ rule ragtag_scaffold:
         ref = os.path.join(PROJECT_ROOT, config["reference"]),
         corrected = rules.ragtag_correct.output.corrected
     output:
-        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "scaffold")),
-        scaffolded = os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "scaffold", "ragtag.scaffold.fasta")
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "scaffold")),
+        scaffolded = os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "scaffold", "ragtag.scaffold.fasta")
     threads: config["threads"]
     shell:
         """
@@ -158,8 +166,8 @@ rule ragtag_patch:
         ref = os.path.join(PROJECT_ROOT, config["reference"]),
         scaffolded = rules.ragtag_scaffold.output.scaffolded
     output:
-        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "patch")),
-        patched = os.path.join(SAMPLE_DIR, "{sample}", "3_ragtag", "patch", "ragtag.patch.fasta")
+        dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "patch")),
+        patched = os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "patch", "ragtag.patch.fasta")
     threads: config["threads"]
     shell:
         """
@@ -172,10 +180,15 @@ rule busco:
     input:
         assembly = rules.ragtag_patch.output.patched
     output:
-        summary = os.path.join(SAMPLE_DIR, "{sample}", "4_busco", "short_summary.txt")
+        summary = os.path.join(
+            SAMPLE_DIR,
+            "{sample}",
+            "busco",
+            "short_summary.specific.{lineage}.busco_results.txt"
+        )
     params:
         lineage = config["busco_lineage"],
-        out_dir = os.path.join(SAMPLE_DIR, "{sample}", "4_busco"),
+        out_dir = os.path.join(SAMPLE_DIR, "{sample}", "busco"),
         download_path = os.path.join(PROJECT_ROOT, "external/busco")
     threads: config["threads"]
     shell:
@@ -192,16 +205,16 @@ rule busco:
               --download_path "{params.download_path}"
         
         # Move summary to standard location
-        mv "{params.out_dir}/busco_results/short_summary.txt" "{output.summary}"
+        mv "{params.out_dir}/busco_results/short_summary.specific.{params.lineage}.busco_results.txt" "{output.summary}"
         """
 
 rule quast:
     input:
         assembly = rules.ragtag_patch.output.patched
     output:
-        report = os.path.join(SAMPLE_DIR, "{sample}", "5_quast", "report.html")
+        report = os.path.join(SAMPLE_DIR, "{sample}", "quast", "report.html")
     params:
-        outdir = os.path.join(SAMPLE_DIR, "{sample}", "5_quast")
+        outdir = os.path.join(SAMPLE_DIR, "{sample}", "quast")
     threads: config["threads"]
     shell:
         """
