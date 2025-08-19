@@ -58,6 +58,17 @@ def get_samples():
 
 SAMPLES = get_samples()
 
+# Detect total number of CPU threads from Snakemake --cores
+TOTAL_THREADS = workflow.cores
+
+# Set optimal threads per tool
+FASTP_THREADS = max(1, TOTAL_THREADS // 2)
+MEGAHIT_THREADS = max(1, TOTAL_THREADS)
+RAGTAG_THREADS = max(1, TOTAL_THREADS // 2)
+BUSCO_THREADS = max(1, TOTAL_THREADS // 2)
+QUAST_THREADS = max(1, TOTAL_THREADS // 2)
+AUGUSTUS_THREADS = 1
+
 # --- Rules ---
 rule all:
     input:
@@ -94,7 +105,7 @@ rule fastp:
         r2 = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "clean_R2.fq.gz"),
         html = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "report.html"),
         json = os.path.join(SAMPLE_DIR, "{sample}", "fastp", "report.json")
-    threads: config["threads"]
+    threads: FASTP_THREADS
     shell:
         """
         fastp --in1 {input.r1} --in2 {input.r2} \
@@ -110,8 +121,7 @@ rule megahit:
         r2 = rules.fastp.output.r2
     output: 
         contigs = os.path.join(SAMPLE_DIR, "{sample}", "megahit", "final.contigs.fa")    
-    threads: 
-        config["threads"]
+    threads: MEGAHIT_THREADS
     resources:
         mem_mb = int(config["ram_percentage"] * os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 ** 2))
     shell:
@@ -138,7 +148,7 @@ rule ragtag_correct:
     output:
         dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "correct")),
         corrected = os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "correct", "ragtag.correct.fasta")
-    threads: config["threads"]
+    threads: RAGTAG_THREADS
     shell:
         """
         ragtag.py correct {input.ref} {input.contigs} \
@@ -153,7 +163,7 @@ rule ragtag_scaffold:
     output:
         dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "scaffold")),
         scaffolded = os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "scaffold", "ragtag.scaffold.fasta")
-    threads: config["threads"]
+    threads: RAGTAG_THREADS
     shell:
         """
         ragtag.py scaffold {input.ref} {input.corrected} \
@@ -168,7 +178,7 @@ rule ragtag_patch:
     output:
         dir = directory(os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "patch")),
         patched = os.path.join(SAMPLE_DIR, "{sample}", "ragtag", "patch", "ragtag.patch.fasta")
-    threads: config["threads"]
+    threads: RAGTAG_THREADS
     shell:
         """
         ragtag.py patch {input.ref} {input.scaffolded} \
@@ -190,7 +200,7 @@ rule busco:
         lineage = config["busco_lineage"],
         out_dir = os.path.join(SAMPLE_DIR, "{sample}", "busco"),
         download_path = os.path.join(PROJECT_ROOT, "external/busco")
-    threads: config["threads"]
+    threads: BUSCO_THREADS
     shell:
         """
         # Create output directory
@@ -215,7 +225,7 @@ rule quast:
         report = os.path.join(SAMPLE_DIR, "{sample}", "quast", "report.html")
     params:
         outdir = os.path.join(SAMPLE_DIR, "{sample}", "quast")
-    threads: config["threads"]
+    threads: QUAST_THREADS
     shell:
         """
         # Create output directory
@@ -224,4 +234,24 @@ rule quast:
         quast.py {input.assembly} \
                  -o "{params.outdir}" \
                  --threads {threads}
+        """
+
+rule augustus:
+    input:
+        assembly = rules.ragtag_patch.output.patched
+    output:
+        gff = os.path.join(SAMPLE_DIR, "{sample}", "augustus", "predictions.gff")
+    params:
+        outdir = os.path.join(SAMPLE_DIR, "{sample}", "augustus")
+    threads: AUGUSTUS_THREADS
+    shell:
+        """
+        # Create output directory
+        mkdir -p "{params.outdir}"
+        
+        augustus --species=saccharomyces_cerevisiae_S288C \
+                 --genemodel=intronless \
+                 --gff3=on \
+                 {input.assembly} \
+                 > "{output.gff}"
         """
