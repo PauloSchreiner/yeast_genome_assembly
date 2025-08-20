@@ -84,6 +84,10 @@ rule all:
         expand(
             os.path.join(SAMPLE_DIR, "{sample}", "quast", "report.html"),
             sample=SAMPLES
+        ),
+        expand(
+            os.path.join(SAMPLE_DIR, "{sample}", "augustus", "predictions.gff"),
+            sample=SAMPLES
         )
 
 # Helper function to find FASTQ files

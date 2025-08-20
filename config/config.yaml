@@ -1,4 +1,4 @@
-run_id: "" # Unique identifier for the run, can be set manually or generated
+run_id: "augustus_test" # Unique identifier for the run, can be set manually or generated
 
 results_root: "results"  # Base directory for all results
 genomes_dir: data/raw   # Directory containing genome folders
