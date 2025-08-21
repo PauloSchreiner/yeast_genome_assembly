@@ -11,6 +11,7 @@
 - Reference-guided correction, scaffolding and patching (RagTag)  
 - Completeness assessment (BUSCO)  
 - Assembly metrics (QUAST)  
+- Annotation (Augustus)
 
 *Designed for assembling Illumina paired-end reads.*
 
@@ -41,7 +42,6 @@ results_root: "results"                  # Base directory for all results
 genomes_dir: data/raw                    # Directory containing genome folders
 busco_lineage: saccharomycetes_odb10     # BUSCO database
 reference: data/references/S288C.fa      # Path to reference genome for RagTag
-threads: 6                               # Number of CPU cores to use
 ram_percentage: 0.8                      # RAM fraction to use
 ```
 
@@ -134,7 +134,10 @@ dependencies:
 
 ### *Here are some features that I plan on adding in the near future:*
 
+- **Re-running from checkpoint with intermediate input**
+    For example, re-run only the annotation rules of the pipeline with the assembled genome as input. 
     
+
 - **Customizable parameters**: 
     As of right now, the pipeline is very rigid — in order to edit the parameters of each tool, one must edit the pipeline_run.sh script. In future versions, I want the users to be able to edit such parameters in the config.yaml file.
 
@@ -147,8 +150,8 @@ dependencies:
     Save and compare multiple parameter sets. Allow the user to save multiple config files with different run parameters (and perhaps even with different tools) and call the specific config file they want upon running the pipeline. This would allow the user to compare multiple parameters without losing the previous ones. 
     - **Implementation:**
     ```bash
-    ./pipeline_run.sh --config config_abyss.yaml  # Use ABySS params
-    ./pipeline_run.sh --config config_megahit.yaml # Use MEGAHIT params
+    snakemake --config config_abyss.yaml  # Use ABySS params
+    snakemake --config config_megahit.yaml # Use MEGAHIT params
     ```
 
     - **Directory structure:**
@@ -162,13 +165,6 @@ dependencies:
     - **Automatic logging:**
       - Archive used configs in results/run_*/config_backup.yaml
       - Generate comparative reports when different configs are tested
-
-
-- **Expanding to genome annotation**:
-    Why limit ourselves to assembling yeast genomes? This tool will later be expanded to include genome annotation with Augustus! 
-
-- **Improving outputs**:
-    Last but not least, improve the terminal outputs and create general reports of all pipeline for users to assess.  
 
 
 *If you have suggestions, please open an issue within the repo! :D*

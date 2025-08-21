@@ -1,4 +1,4 @@
-run_id: "augustus_test" # Unique identifier for the run, can be set manually or generated
+run_id: "full_annotated" # Unique identifier for the run, can be set manually or generated
 
 results_root: "results"  # Base directory for all results
 genomes_dir: data/raw   # Directory containing genome folders
@@ -6,5 +6,4 @@ genomes_dir: data/raw   # Directory containing genome folders
 busco_lineage: saccharomycetes_odb10  # BUSCO database
 reference: data/references/S288C.fa  # Path to reference genome for RagTag
 
-threads: 15                 # Number of CPU cores to use
-ram_percentage: 0.9                # RAM fraction to use
+ram_percentage: 0.9                # RAM fraction to use (some tools, such as megahit, require this setting)

@@ -15,10 +15,12 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, config.get("results_root", "results"))
 # Generate run_id if not provided
 if "run_id" not in config or not config["run_id"]:
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    print(f"Generated run_id: {run_id}")
+    if "SNAKEMAKE_OUTPUT_UNBUFFERED" in os.environ:  # Avoids printing during DAG generation
+        print(f"Generated run_id: {run_id}")
 else:
     run_id = config["run_id"]
-    print(f"Using config run_id: {run_id}")
+    if "SNAKEMAKE_OUTPUT_UNBUFFERED" in os.environ:  # Avoids printing during DAG generation
+        print(f"Using config run_id: {run_id}")
 
 
 RUN_DIR = os.path.join(RESULTS_DIR, run_id)
@@ -48,12 +50,14 @@ def get_samples():
             if r1_files and r2_files:
                 samples.append(sample_name)
             else:
-                print(f"Warning: Sample {sample_name} is missing paired FASTQ files")
+                if "SNAKEMAKE_OUTPUT_UNBUFFERED" in os.environ: # Avoids printing during DAG generation
+                    print(f"Warning: Sample {sample_name} is missing paired FASTQ files")
     
     if not samples:
         raise ValueError("No valid samples found in data/raw directory")
     
-    print(f"Found {len(samples)} samples: {', '.join(samples)}")
+    if "SNAKEMAKE_OUTPUT_UNBUFFERED" in os.environ:  # Avoids printing during DAG generation
+        print(f"Found {len(samples)} samples: {', '.join(samples)}")
     return samples
 
 SAMPLES = get_samples()
